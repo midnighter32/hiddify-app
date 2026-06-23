@@ -24,12 +24,16 @@ import 'package:hiddify/features/profile/data/profile_data_providers.dart';
 import 'package:hiddify/features/profile/notifier/active_profile_notifier.dart';
 import 'package:hiddify/features/proxy/active/active_proxy_notifier.dart';
 import 'package:hiddify/features/system_tray/notifier/system_tray_notifier.dart';
+import 'package:hiddify/features/wear_sync/wear_sync_service.dart';
 import 'package:hiddify/features/window/notifier/window_notifier.dart';
 import 'package:hiddify/hiddifycore/hiddify_core_service_provider.dart';
 import 'package:hiddify/riverpod_observer.dart';
 import 'package:hiddify/utils/utils.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
+
+// Kept alive for the lifetime of the app (holds Data Layer subscriptions).
+WearSyncService? _wearSync;
 
 Future<void> lazyBootstrap(WidgetsBinding widgetsBinding, Environment env) async {
   if (!kIsWeb) {
@@ -102,6 +106,12 @@ Future<void> lazyBootstrap(WidgetsBinding widgetsBinding, Environment env) async
   // Eagerly listen to activeProxyNotifierProvider to force synchronous evaluation in microtasks,
   // avoiding lazy build-phase flushes and sibling dependency collisions on the Home page.
   container.listen(activeProxyNotifierProvider, (previous, next) {});
+
+  // Sync profiles to a paired Wear OS watch (Android only).
+  if (PlatformUtils.isAndroid) {
+    _wearSync = WearSyncService(container);
+    unawaited(_wearSync!.startSender());
+  }
 
   if (!kIsWeb) {
     // await _safeInit(
