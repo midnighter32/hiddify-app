@@ -7,6 +7,9 @@ import android.content.pm.PackageManager
 import android.net.VpnService
 import android.os.Build
 import android.util.Log
+import android.view.MotionEvent
+import com.samsung.wearable_rotary.WearableRotaryPlugin
+import io.flutter.plugin.common.MethodChannel
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -36,6 +39,9 @@ class MainActivity : FlutterFragmentActivity(), ServiceConnection.Callback {
 
     private val connection = ServiceConnection(this, this)
 
+    // Action requested from the Wear OS tile (e.g. "toggle"), consumed by Dart.
+    private var pendingTileAction: String? = null
+
     val logList = LinkedList<String>()
     var logCallback: ((Boolean) -> Unit)? = null
     val serviceStatus = MutableLiveData(Status.Stopped)
@@ -44,11 +50,63 @@ class MainActivity : FlutterFragmentActivity(), ServiceConnection.Callback {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         instance = this
+        intent?.getStringExtra("hiddify_tile_action")?.let { pendingTileAction = it }
         reconnect()
         flutterEngine.plugins.add(MethodHandler(lifecycleScope))
         flutterEngine.plugins.add(PlatformSettingsHandler())
         flutterEngine.plugins.add(EventHandler())
         flutterEngine.plugins.add(LogHandler())
+
+        // Wear OS proxy-mode helper: route the watch's apps through the local
+        // proxy by setting the device-wide HTTP proxy (needs WRITE_SECURE_SETTINGS,
+        // granted once via adb). No-op / harmless on phone.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.hiddify.app/wear_proxy")
+            .setMethodCallHandler { call, result ->
+                try {
+                    when (call.method) {
+                        "setSystemProxy" -> {
+                            val host = call.argument<String>("host") ?: "127.0.0.1"
+                            val port = call.argument<Int>("port") ?: 0
+                            android.provider.Settings.Global.putString(
+                                contentResolver,
+                                android.provider.Settings.Global.HTTP_PROXY,
+                                "$host:$port",
+                            )
+                            result.success(true)
+                        }
+                        "clearSystemProxy" -> {
+                            android.provider.Settings.Global.putString(
+                                contentResolver,
+                                android.provider.Settings.Global.HTTP_PROXY,
+                                ":0",
+                            )
+                            result.success(true)
+                        }
+                        "consumeTileAction" -> {
+                            val action = pendingTileAction
+                            pendingTileAction = null
+                            result.success(action)
+                        }
+                        "requestComplicationUpdate" -> {
+                            androidx.wear.watchface.complications.datasource
+                                .ComplicationDataSourceUpdateRequester
+                                .create(
+                                    applicationContext,
+                                    android.content.ComponentName(
+                                        this,
+                                        com.hiddify.hiddify.bg.HiddifyComplicationService::class.java,
+                                    ),
+                                )
+                                .requestUpdateAll()
+                            result.success(true)
+                        }
+                        else -> result.notImplemented()
+                    }
+                } catch (e: Throwable) {
+                    Log.w(TAG, "wear_proxy: ${e.message}")
+                    result.error("proxy_error", e.message, null)
+                }
+            }
 //        flutterEngine.plugins.add(GroupsChannel(lifecycleScope))
 //        flutterEngine.plugins.add(ActiveGroupsChannel(lifecycleScope))
 //        flutterEngine.plugins.add(StatsChannel(lifecycleScope))
@@ -56,6 +114,15 @@ class MainActivity : FlutterFragmentActivity(), ServiceConnection.Callback {
 
     fun reconnect() {
         connection.reconnect()
+    }
+
+    // Forward Wear OS rotary (crown/bezel) input to the wearable_rotary plugin.
+    // No-op on phones, where these events never occur.
+    override fun onGenericMotionEvent(event: MotionEvent?): Boolean {
+        return when {
+            WearableRotaryPlugin.onGenericMotionEvent(event) -> true
+            else -> super.onGenericMotionEvent(event)
+        }
     }
 
     @SuppressLint("NewApi")
@@ -131,6 +198,12 @@ class MainActivity : FlutterFragmentActivity(), ServiceConnection.Callback {
 
 
 
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        intent.getStringExtra("hiddify_tile_action")?.let { pendingTileAction = it }
+        setIntent(intent)
+    }
 
     override fun onDestroy() {
         connection.disconnect()
