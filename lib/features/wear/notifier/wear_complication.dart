@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:dio/dio.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -10,6 +11,7 @@ import 'package:hiddify/core/preferences/preferences_provider.dart';
 import 'package:hiddify/features/connection/model/connection_status.dart';
 import 'package:hiddify/features/connection/notifier/connection_notifier.dart';
 import 'package:hiddify/features/proxy/active/active_proxy_notifier.dart';
+import 'package:hiddify/features/proxy/data/proxy_data_providers.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -29,7 +31,9 @@ class WearComplication {
         final proxy = container.read(activeProxyNotifierProvider).valueOrNull;
         final ping = proxy?.urlTestDelay ?? 0;
         await prefs.setString('hiddify_wear_ping', (ping > 0 && ping < 65000) ? '$ping' : '--');
-        final cc = proxy?.ipinfo.countryCode ?? '';
+        // Country from the LIVE exit geolocation (correct for chained proxies),
+        // not activeProxy.ipinfo which the core may report as the entry node.
+        final cc = await _exitCountryCode(container) ?? proxy?.ipinfo.countryCode ?? '';
         if (cc.isNotEmpty) {
           final path = await _renderFlag(cc);
           if (path != null) await prefs.setString('hiddify_wear_flag_path', path);
@@ -41,6 +45,18 @@ class WearComplication {
       } catch (_) {}
     } catch (e, st) {
       Logger.bootstrap.warning("wear complication update failed", e, st);
+    }
+  }
+
+  // Geolocates the real exit IP through the proxy (same sources the phone
+  // uses). Correct for chained configs where the entry differs from the exit.
+  static Future<String?> _exitCountryCode(ProviderContainer container) async {
+    try {
+      final result =
+          await container.read(proxyRepositoryProvider).getCurrentIpInfo(CancelToken()).run();
+      return result.fold((_) => null, (info) => info.countryCode);
+    } catch (_) {
+      return null;
     }
   }
 
