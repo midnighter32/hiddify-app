@@ -48,6 +48,23 @@
 
 📱Доступно в официальных магазинах.
 
+⌚ Поддержка Wear OS (см. ниже).
+
+## ⌚ Wear OS
+
+Hiddify работает на часах Wear OS: урезанный UI под круглый экран, плитка
+быстрого включения (**Tile**) и **Complication** для циферблата (флаг страны +
+пинг). Часы могут быть **пультом для VPN на телефоне** (полная защита трафика
+телефона) или поднимать **локальный прокси** от своего Wi‑Fi. Профили
+синхронизируются с телефона через Wear Data Layer.
+
+> Важно: в Wear OS нет системного VPN‑сервиса, поэтому полноценный tun‑VPN на
+> часах невозможен — автономный режим только прокси (приложения, уважающие
+> системный HTTP‑прокси; Telegram/UDP — мимо).
+
+Сборка: `flutter build apk -t lib/main_wear.dart --target-platform android-arm`.
+Подробности (настройка, синхронизация, ограничения) — **[docs/wear_os.md](docs/wear_os.md)**.
+
 ## 🛍️ Приобретите в магазинах
 
 <a href="https://apps.apple.com/us/app/hiddify-proxy-vpn/id6596777532?platform=iphone"><img height=50px src="https://github.com/user-attachments/assets/a7c62126-07ce-4f18-8197-bbb672f6d8be"></a>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
