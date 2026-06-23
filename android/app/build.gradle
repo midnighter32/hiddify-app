@@ -72,7 +72,9 @@ android {
 
     defaultConfig {
         applicationId "app.hiddify.com"
-        minSdkVersion flutter.minSdkVersion
+        // Wear OS tiles/complications libs require minSdk 26; Wear OS is API 30+
+        // anyway, and API 26 (Android 8) drops only negligible legacy phones.
+        minSdkVersion 26
         targetSdkVersion 36
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
@@ -146,6 +148,15 @@ dependencies {
     implementation 'io.grpc:grpc-okhttp:1.64.0'
     implementation 'io.grpc:grpc-protobuf-lite:1.64.0'
     implementation 'io.grpc:grpc-stub:1.64.0'
+
+    // Wear OS quick-toggle Tile
+    implementation 'androidx.wear.tiles:tiles:1.4.1'
+    implementation 'androidx.wear.protolayout:protolayout:1.2.1'
+    implementation 'androidx.wear.protolayout:protolayout-material:1.2.1'
+    implementation 'com.google.guava:guava:33.3.1-android'
+
+    // Wear OS watch-face complication (country flag + ping)
+    implementation 'androidx.wear.watchface:watchface-complications-data-source:1.2.1'
 //    protoPath(project(':hiddify_api'))
 //    implementation project(':hiddify_api')
 
